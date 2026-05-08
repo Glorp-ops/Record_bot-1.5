@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import os
 from sqlalchemy.exc import IntegrityError
 import sqlalchemy
 from aiogram_calendar import SimpleCalendar, SimpleCalendarCallback
@@ -19,13 +20,18 @@ from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
 from State.send_message import SendMessage
 from tabulate import tabulate
+from dotenv import load_dotenv
+from json import loads
+load_dotenv()
 
 rt = Router()
 bot = Bot(token=TOKEN)
 
+str_admins = os.getenv('ADMIN_ID')
+admins = loads(str_admins)
+
 rt.message.middleware(LoggerMiddlewareMessage())
 rt.callback_query.middleware(LoggerMiddlewareCallback())
-
 
 
 
@@ -36,9 +42,8 @@ rt.callback_query.middleware(LoggerMiddlewareCallback())
 async def command_start_handler(message: Message,session) -> None:
     search_tg_id = await session.execute(select(User).where(User.tg_id == message.from_user.id))
     tg_id = search_tg_id.scalar_one_or_none()
-    print(tg_id)
 
-    if tg_id == None and message.from_user.id != 1822405102:
+    if tg_id == None and message.from_user.id not in admins:
 
         await message.answer("Я тг бот для записи на занятия \n\n"
                              "Основыне команды:\n"
@@ -46,13 +51,14 @@ async def command_start_handler(message: Message,session) -> None:
                              "/end - завершение кого ли процесса\n"
                              
                              "Чтобы записаться на занятия зарегестрируете аккаунт ", reply_markup=register_keyboard())
-    if tg_id != None and message.from_user.id != 1822405102:
+    if tg_id != None and message.from_user.id not in admins:
 
 
         await message.answer(f"Здравствуйте,{tg_id.user_name}! \n"
                              "Что вы сегодня хотите сделать?", reply_markup=keyboard_menu())
 
-    if message.from_user.id == 1822405102 and tg_id != None:
+    if message.from_user.id in admins and tg_id != None:
+
         await message.answer("Здравствуйте, админ! Вот ваши команды:\n"
                              "/all - посмотреть всех пользователей\n"
                              "/send_message - отправить сообщения всем пользователям\n"
@@ -60,17 +66,20 @@ async def command_start_handler(message: Message,session) -> None:
                              "Что вы сегодня хотите сделать?", reply_markup=keyboard_menu())
 
 
+
+
+
 @rt.message(Command('end'))
 async def cmd_end(message: Message, state: FSMContext):
 
     await state.clear()
 
-    await message.answer('Процесс закончен',reply_markup=ReplyKeyboardRemove())
+    await message.answer('Процесс закончен', reply_markup=ReplyKeyboardRemove())
 
 
 
 
-@rt.message(Command('all'), StateFilter(None) , F.from_user.id == 1822405102)
+@rt.message(Command('all'), StateFilter(None) , F.from_user.id.in_(admins))
 async def cmd_all(message: Message,session):
 
     search_user_id = await session.execute(select(User).where(User.tg_id == message.from_user.id))
@@ -81,7 +90,9 @@ async def cmd_all(message: Message,session):
 
     if info_record_user == None:
         await message.answer('У вас нет записей')
+
     else:
+
         sel_users_name =  await session.execute(select(User).order_by(User.id))
         users_name = sel_users_name.scalars()
 
@@ -108,17 +119,12 @@ async def cmd_all(message: Message,session):
 
         data = list(zip(users_id_print,users_name_print,users_tg_id_print,users_role_print))
 
-        # await message.answer(f'Количество: {number_users}\n\n'
-        #                      f'id:    |{users_id_print}                       |\n'
-        #                      f'Имя: |{users_name_print}           |\n'
-        #                      f'tg_id:|{users_tg_id_print}    |\n'
-        #                      f'role:|{users_role_print}                  |')
 
         await message.answer(f'Количество: {number_users}\n'
                              f'<pre> {tabulate(data, headers=['Id', 'Имя', 'tg_id', 'Роль'] ,tablefmt='psql', stralign='center', numalign='center' )} </pre> ', parse_mode='HTML')
 
-@rt.message(Command('send_message'), F.from_user.id == 1822405102)
-async def cmd_send_message_command(message: Message, state: FSMContext, session):
+@rt.message(Command('send_message'), F.from_user.id.in_(admins))
+async def cmd_send_message_command(message: Message, state: FSMContext):
     await state.set_state(SendMessage.message)
     await message.answer('Введите какой текст, который вы хотите отправить всем: ')
 
@@ -142,7 +148,7 @@ async def cmd_send_message(message: Message, state: FSMContext, session):
         except:
             pass
 
-@rt.message(Command('edit_lessons'), StateFilter(None) , F.from_user.id == 1822405102 )
+@rt.message(Command('edit_lessons'), StateFilter(None) , F.from_user.id.in_(admins) )
 async def cmd_edit_lessons(message: Message):
 
     await message.answer('Что вы хотите сделать? ', reply_markup=edit_lessons_keyboard())
@@ -342,7 +348,7 @@ async def reg_name(message: Message, state: FSMContext, session):
     search_user = await session.execute(select(User).where(User.tg_id == message.from_user.id))
 
     user = search_user.scalar_one_or_none()
-    search_admin =  await session.execute(select(User).where(User.tg_id == 1822405102))
+    search_admin =  await session.execute(select(User).where(User.tg_id.in_(admins)))
 
     admin = search_admin.scalar_one_or_none()
 
@@ -351,7 +357,7 @@ async def reg_name(message: Message, state: FSMContext, session):
 
 
 
-    if user == None and message.from_user.id != 1822405102:
+    if user == None and message.from_user.id not in admins:
 
         user_add = User(tg_id = message.from_user.id,user_name = name['name'], role = 'user')
         session.add(user_add)
