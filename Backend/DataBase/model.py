@@ -1,5 +1,5 @@
 from datetime import date,time
-from sqlalchemy import BigInteger, String, ForeignKey, DateTime, Date, Time, UniqueConstraint
+from sqlalchemy import BigInteger, String, ForeignKey, Date, Time, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from DataBase.database import Base, engine
@@ -8,10 +8,10 @@ from DataBase.database import Base, engine
 class User(Base):
     __tablename__='users'
 
-    id:Mapped[int]=mapped_column(primary_key=True)
+    id:Mapped[int] = mapped_column(primary_key=True)
     tg_id:Mapped[int]=mapped_column(BigInteger,unique=True)
     user_name:Mapped[str] = mapped_column(String(100))
-    role:Mapped[str]=mapped_column(String(20),default='user')
+    role:Mapped[str] = mapped_column(String(20),default='user')
 
     records: Mapped[list["Record"]] = relationship(back_populates="user")
 
